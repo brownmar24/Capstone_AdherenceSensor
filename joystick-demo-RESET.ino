@@ -197,8 +197,7 @@ void setup(){
        Serial.println("File doesn't exist; no need to delete");
    }
    else {
-       Serial.println("File doesn’t exist");
-       Serial.println("Deleting file...");
+       Serial.println("Found File; now deleting...");
        // Create File and add header
        deleteFile(LittleFS, "/joystick.txt");
    }
