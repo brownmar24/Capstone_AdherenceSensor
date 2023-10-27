@@ -11,8 +11,11 @@
 
 #define FORMAT_LITTLEFS_IF_FAILED true
 
-int x_value;
-int y_value;
+#define VRX_PIN 36
+#define VRY_PIN 39
+
+int x_value = 0;
+int y_value = 0;
 
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     Serial.printf("Listing directory: %s\r\n", dirname);
@@ -205,9 +208,10 @@ void setup(){
 }
 
 void loop(){
-  x_value = random(0,4096);
-  y_value = random(0,4096);
+  x_value = analogRead(VRX_PIN);
+  y_value = analogRead(VRY_PIN);
+  
   appendFile(LittleFS, "/joystick.txt", (String(x_value) + ", " + String(y_value) + "\r\n").c_str());
-  readFile(LittleFS, "/joystick.txt");
-  delay(8000);
+  Serial.println(String(x_value) + ", " + String(y_value) +  "\n");
+  delay(1000);
 }
