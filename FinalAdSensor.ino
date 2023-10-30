@@ -10,42 +10,46 @@
 //Bluetooth(possible)
 //
 //Libraries
-#include <SPI.h>
-#include <Wire.h>
-#include <SparkFun_RV8803.h>
-#include "SparkFun_KX13X.h"
-#include <Adafruit_Sensor.h>
-#include <Adafruit_LIS3DH.h>
-#include "FS.h"
-#include "SD.h"
-#include "SPI.h"
+#include <SPI.h> // Communication with Serial Peripheral Interface (SPI) devices (ex. microcontroller and other circuits)
+#include <Wire.h> // I2C communication between chips
+#include <SparkFun_RV8803.h> // Read and set time on the RTC
+#include "SparkFun_KX13X.h" // Configures and communicates data from the SparkFun KX13X accelerometer
+#include <Adafruit_Sensor.h> // Required library for all Adafruit Unified Sensor libraries
+#include <Adafruit_LIS3DH.h> // Configures and communicates data from Adafruit LIS3DH accelerometer (uses Unifed Sensor Library)
+#include "FS.h" // ESP 32 File System library
+#include "SD.h" // Reading and writing to SD cards using the SPI interface of a microcontroller
+#include "SPI.h" // Part of the SPI library
 
 
 //variables
-RV8803 rtc;
-SparkFun_KX134 kxAccel;
-outputData myData;   // Struct for the accelerometer's data
-Adafruit_LIS3DH lis = Adafruit_LIS3DH();
-const float gravity = 9.80665;  // earth's gravity in m/s^2
+RV8803 rtc; // Real Time Clock variable - uses the class RV8803
+SparkFun_KX134 kxAccel; // KS134 Accelerometer variable - UPDATE 10/30/2023: looks unused
+outputData myData;   // Struct for the accelerometer's data - UPDATE 10/30/2023: looks unused
+Adafruit_LIS3DH lis = Adafruit_LIS3DH(); // LIS3DH Accelerometer variable - UPDATE 10/30/2023: looks used
+const float gravity = 9.80665;  // Earth's gravity in m/s^2
 
 float accel;
 int detect = 0;
 float timeBlink = 0;
 bool det = false;
+
+// Hold the previous averaged readings for each axis on the accelerometer
 float last_x;
 float last_y;
 float last_z;
+
+// Hold the current averaged readings for each axis on the accelerometer
 float x;
 float y;
 float z;
+
+// STILL FIGURING OUT THE PURPOSE
 float move_tholdX = 0.1;
 float move_tholdY = 0.1;
 float move_tholdZ = 0.1;
 
-
-
 //Pins
-#define EVI 14 // timestamp pin
+#define EVI 14 // Timestamp pin
 #define LED 17 // LED pin
 
 //timestamp subroutine
