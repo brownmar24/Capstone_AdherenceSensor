@@ -55,11 +55,10 @@ float move_tholdZ = 0.1;
 //timestamp subroutine
 String RTC()
 {
-  String time;
-
+  String time; // The string used to save the timestamp data
   //RTC timestamp
   if (rtc.getInterruptFlag(FLAG_EVI)) {
-    rtc.updateTime();
+    rtc.updateTime(); // Grabs an updated gime from the compiler
     rtc.clearInterruptFlag(FLAG_EVI);
 
     // Get the current date in mm/dd/yyyy format
@@ -68,152 +67,162 @@ String RTC()
     //Get the timestamp
     String timestamp = rtc.stringTimestamp();
 
+    // Saves the date string and the time string
     time = currentTime + " " + timestamp;
 
-    Serial.print(time);
+    Serial.print(time); // Prints the date and time to the serial monitor
     //end debug
   }
-
-  return time;
+  return time; // Returns the timestamp string
 }
+
 //read from the accelerometer function puts data through moving average filter
 void accelRead() {
 
   // new sensor event
   sensors_event_t event;
 
+  // Sums the 50 samples for each axis
   float x_sum = 0;
   float y_sum = 0;
   float z_sum = 0;
 
   //Moving Average Filter- Take average of 50 samples for each axis
   for (int i = 0; i < 50; i++) {
-    lis.getEvent(&event);
-    x_sum += (-event.acceleration.z);
-    y_sum += event.acceleration.y;
-    z_sum += (-event.acceleration.x);
-    delay(2);
+    lis.getEvent(&event); // Grabs the specific accelerometer data
+
+    x_sum += (-event.acceleration.z); // Adds this specific x-axis instance to the sum, using the negated z-axis accelerometer data
+    y_sum += event.acceleration.y; // Adds this specific y-axis instance to the sum
+    z_sum += (-event.acceleration.x); // Adds this specific z-axis instance to the sum, using the negated x-axis accelerometer data
+    delay(2); // Delays for 2 milliseconds
   }
 
+  // Assigns the previous readings to the 'last' versions of the specific axes
   last_x = x;
   last_y = y;
   last_z = z;
 
+  // Divides the readings by 50 (because of the 50 readings), and assigns these values to their respective axis readings
   x = x_sum / 50.0;
   y = y_sum / 50.0;
   z = z_sum / 50.0;
 }
+
 void sd_Start() {//prints to sd card starting
 
-  String startTime = RTC(); //timestamp
-  Serial.println();
+  String startTime = RTC(); // Grabs the initial timestamp using the RTC helper function
+  Serial.println(); // Adds a new line in the serial monitor
   File file = SD.open("/accelerationdata.txt", FILE_APPEND); //open file.txt to write data
-  if (!file) {
-    Serial.println("Could not open file(writing).");
+  if (!file) { // If the accelerationdata.txt file couldn't be read, follow this condition
+    Serial.println("Could not open file(writing)."); // Prints to the serial monitor that the file couldn't be opened
   }
-  else {
-    file.print("Start Time of Motion Detected At: ");
-    file.print(startTime);
-    file.println();
-    file.close();
+  else { // The accelerationdata.txt file could be read: 
+    file.print("Start Time of Motion Detected At: "); // Appends this to the bottom of the file when a new motion is detected
+    file.print(startTime); // Prints the initial time stamp to the file
+    file.println(); // Adds a new line to the text file
+    file.close(); // Closes accelerationdata.txt file
   }
 
 }
 void sd_Stop() {//printing to the SD card
 
   String stopTime = RTC(); //timestamp
-  Serial.println();
+  Serial.println(); // Adds a new line
   File file = SD.open("/accelerationdata.txt", FILE_APPEND); //open file.txt to write data
-  if (!file) {
-    Serial.println("Could not open file(writing).");
+  if (!file) { // If the accelerationdata.txt file couldn't be read, follow this condition
+    Serial.println("Could not open file(writing)."); // Prints to the serial monitor that the file couldn't be opened
   }
-  else {
-    file.print("Time of Stop Detected At: ");
-    file.print(stopTime);
-    file.println();
-    file.close();
+  else { // The acclerationdata.txt file could be read
+    file.print("Time of Stop Detected At: "); // Appends this to the bottom of the file when motion is stopped
+    file.print(stopTime); // Prints the stopping time stamp to the file
+    file.println(); // Adds a new line to the text file
+    file.close(); // Closes the accelerationdata.txt file
   }
 
 }
+
 void setup()
 {
-  pinMode(LED, OUTPUT);
-  pinMode(EVI, OUTPUT);
+  pinMode(LED, OUTPUT); // Sets the LED pin for output information (turning on and off the LED)
+  pinMode(EVI, OUTPUT); // NEED INFORMATION: Why is this an output pin?
   Wire.begin();//I2C addresses begin
   Serial.begin(115200);//set baud rate
 
   //RTC initialization
-  if (rtc.begin() == false)
+  if (rtc.begin() == false) // If the RTC cannot be found or started
   {
-    Serial.println("Device not found. Please check wiring. Freezing.");
-    while (1);
+    Serial.println("Device not found. Please check wiring. Freezing."); // Prints to the serial monitor that the RTC cannot be found
+    while (1); // NEED INFORMATION: why are they using an infinite loop?
   }
-  Serial.println("RTC online!");
+  Serial.println("RTC online!"); // Prints to the serial monitor that the RTC was found 
 
   rtc.setEVIEventCapture(RV8803_ENABLE); //Enables the Timestamping function
 
   Serial.println("LIS3DH test!");
-  if (! lis.begin(0x18)) {
-    Serial.println("Couldnt start");
-    while (1) yield();
+  if (! lis.begin(0x18)) { // If the LIS3DH accelerometer cannot be found or used, follow this condition
+    Serial.println("Couldnt start"); // Prints to the serial monitor that the accelerometer cannot be found
+    while (1) yield(); // NEED INFORMATION: why are they using an infinite loop AGAIN? What is yield?
   }
-  Serial.println("LIS3DH found!");
+  Serial.println("LIS3DH found!"); // The LIS3DH accelerometer is found
 
   // Set up lis and init readings
-  lis.setRange(LIS3DH_RANGE_4_G);
-  delay(10);
-  lis.read();
+  lis.setRange(LIS3DH_RANGE_4_G); // NEED INFORMATION: What does this mean?
+  delay(10); // Delays by 10 milliseconds
+  lis.read(); // Takes a reading from the accelerometer
+  
   //orientated on the back of the permobil
-  x = -lis.z;
-  y = lis.y;
-  z = -lis.x;
+  x = -lis.z; // Takes the x-axis reading, using a negated z-axis accelerometer reading
+  y = lis.y; // Takes the y-axis reading
+  z = -lis.x; // Takes the z-axis reading, using a negated x-axis accelerometer reading
 
   // Check if SD is connected correctly
-  if (!SD.begin()) {
-    Serial.println("Card Mount Failed");
+  if (!SD.begin()) { // If the SD card cannot be found, follow this condition
+    Serial.println("Card Mount Failed"); // Prints to the serial monitor that the SD card cannot be found
     //   digitalWrite(LED, HIGH);
     // while (1) { }
-    return;
+    return; // Returns without further action
   }
-  uint8_t cardType = SD.cardType();
+  uint8_t cardType = SD.cardType(); // Saves the type of SD card to an unsigned 8-bit integer
 
-  if (cardType == CARD_NONE) {
-    Serial.println("No SD card attached");
+  if (cardType == CARD_NONE) { // If there is no SD card, follow this condition
+    Serial.println("No SD card attached"); // Prints that there is no SD card attached
     // digitalWrite(LED, HIGH);
     //while (1) { }
-    return;
+    return; // Returns with no further action
   }
 
-  Serial.print("SD Card Type: ");
-  if (cardType == CARD_MMC) {
-    Serial.println("MMC");
+  Serial.print("SD Card Type: "); // Prints this statement to the serial monitor
+  if (cardType == CARD_MMC) { // If the card is a MultiMediaCard, follow this condition
+    Serial.println("MMC"); // Prints that the card is a MultiMediaCard (MMC) to the serial monitor
   }
-  else if (cardType == CARD_SD) {
-    Serial.println("SDSC");
+  else if (cardType == CARD_SD) { // If the card is a standard SD card, follow this condition
+    Serial.println("SDSC"); // Prints that the card is a standard SD card to the serial monitor
   }
-  else if (cardType == CARD_SDHC) {
-    Serial.println("SDHC");
+  else if (cardType == CARD_SDHC) { // If the card is a high capacity SD card, follow this condition
+    Serial.println("SDHC"); // Prints that the card is a high capacity SD card to the serial monitor
   }
-  else {
-    Serial.println("UNKNOWN");
+  else { // If the card is of another type, follow this condition
+    Serial.println("UNKNOWN"); // Prints that the card is of an unknown type of the serial monitor
   }
+  
   //axis zeroing to eliminate false positives
   x = 0;
   y = 0;
   z = 0;
-  //
+  
+  // Procedure at device start-up
   String startTime = RTC(); //timestamp
   Serial.println();
   File file = SD.open("/accelerationdata.txt", FILE_APPEND); //open file.txt to write data
-  if (!file) {
-    Serial.println("Could not open file(writing).");
+  if (!file) { // If the file cannot be opened, follow this condition
+    Serial.println("Could not open file(writing)."); // Prints that the accelerometer.txt file cannot be opened
   }
-  else {
-    file.println();
-    file.print("Device start up at: ");
-    file.print(startTime);
-    file.println();
-    file.close();
+  else { // If the file can be opened, follow this condition
+    file.println(); // Adds a new line to the file
+    file.print("Device start up at: "); // Writes this to the bottom of the file
+    file.print(startTime); // Prints the start-up time to the bottom of the file
+    file.println(); // Prints another new line to the bottom of the file
+    file.close(); // Closes the file
   }
 }
 
@@ -242,8 +251,8 @@ void loop() {
     delay(20);                       // wait for a second
     digitalWrite(EVI, LOW);    // turn off EVI pin output
     Serial.print("Detected "); //Debug purposes
-    det = true;
-    sd_Start();
+    det = true; // Indicates a new motion was detected
+    sd_Start(); // Writes to the file when the motion was detected
   } else if (move_tholdX > abs(last_x - x) &&
              move_tholdY > abs(last_y - y) &&
              move_tholdY > abs(last_z - z) && detect < 3 && det == true) {
@@ -256,13 +265,13 @@ void loop() {
     delay(20);                       // wait for a second
     digitalWrite(EVI, LOW);    // turn off EVI pin output
     Serial.print("Stopped "); //Debug purposes
-    sd_Stop();
-    det = false;
-    detect = 0;
+    sd_Stop(); // Prints the time the motion stopped
+    det = false; // Resets the det boolean to false
+    detect = 0; // Resets the detect counter
   } else {//if the data goes above the thresholds over reset detect counter
-    detect = 0;
+    detect = 0; // Resets the detect counter
   }
   // Give time between readings
-  delay(100);
+  delay(100); // 100 milliseconds between readings
 
 } //EOF
