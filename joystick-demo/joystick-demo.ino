@@ -101,7 +101,7 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
 }
 
 void appendFile(fs::FS &fs, const char * path, const char * message){
-    Serial.printf("Appending to file: %s\r\n", path);
+    //Serial.printf("Appending to file: %s\r\n", path);
 
     File file = fs.open(path, FILE_APPEND);
     if(!file){
@@ -109,7 +109,7 @@ void appendFile(fs::FS &fs, const char * path, const char * message){
         return;
     }
     if(file.print(message)){
-        Serial.println("- message appended");
+        //Serial.println("- message appended");
     } else {
         Serial.println("- append failed");
     }
@@ -209,45 +209,31 @@ void setup(){
    }
 }
 
-String encrypt(String orig_data) {
-  char temp;
-  String encrypt_data = orig_data;
+String encrypt(String orig_string) { 
+  char enc_string[orig_string.length()];
 
-  for (int i = 0; encrypt_data[i] != '\0'; i++){
-    temp = encrypt_data[i];
-    if(temp >= 'a' && temp <= 'z'){
-      temp = temp + key;
-      
-      if(temp > 'z'){
-        temp = temp - 'z' + 'a' - 1;
-      }
-      
-      encrypt_data[i] = temp;
-    }else if(temp >= 'A' && temp <= 'Z'){
-      temp = temp + key;
-      
-      if(temp > 'Z'){
-        temp = temp - 'Z' + 'A' - 1;
-      }
-      
-      encrypt_data[i] = temp;
-    }
-  }//for()
+  for(int i = 0; orig_string[i] != '\0'; ++i){
+    enc_string[i] = orig_string[i] + key;
+  }
 
+  return enc_string;
 }//encrypt()
 
 void loop(){
+  // 1. record x_value & y_value, write them to a string for readability
   x_value = analogRead(VRX_PIN);
   y_value = analogRead(VRY_PIN);
-  // 1. write real string to a variable
-  String x_y_data = String(x_value) + ", " + String(y_value) + "\r\n"; 
+  String x_y_data = String(x_value) + ", " + String(y_value) + "\n"; 
+  
   // 2. Encrypt data set
   String x_y_encrypted = encrypt(x_y_data);
+  
   // 3. Serial print real & encrypted data string
-  Serial.println("Real value: " + x_y_data);
-  Serial.println("Encrypted value: " + x_y_encrypted + "\n");
+  Serial.print("Real value: " + x_y_data);
+  Serial.println("Encrypted value: " + x_y_encrypted);
+  
   // 4. Write encrypted string to the file
-  appendFile(LittleFS, "/joystick.txt", (String(x_value) + ", " + String(y_value) + "\r\n").c_str());
-  Serial.println(String(x_value) + ", " + String(y_value) +  "\n");
+  appendFile(LittleFS, "/joystick.txt", (x_y_encrypted).c_str());
+  //Serial.println(String(x_value) + ", " + String(y_value) +  "\n");
   delay(1000);
 }
