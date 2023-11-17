@@ -17,6 +17,8 @@
 int x_value = 0;
 int y_value = 0;
 
+int key = 5;
+
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     Serial.printf("Listing directory: %s\r\n", dirname);
 
@@ -207,10 +209,44 @@ void setup(){
    }
 }
 
+String encrypt(String orig_data) {
+  char temp;
+  String encrypt_data = orig_data;
+
+  for (int i = 0; encrypt_data[i] != '\0'; i++){
+    temp = encrypt_data[i];
+    if(temp >= 'a' && temp <= 'z'){
+      temp = temp + key;
+      
+      if(temp > 'z'){
+        temp = temp - 'z' + 'a' - 1;
+      }
+      
+      encrypt_data[i] = temp;
+    }else if(temp >= 'A' && temp <= 'Z'){
+      temp = temp + key;
+      
+      if(temp > 'Z'){
+        temp = temp - 'Z' + 'A' - 1;
+      }
+      
+      encrypt_data[i] = temp;
+    }
+  }//for()
+
+}//encrypt()
+
 void loop(){
   x_value = analogRead(VRX_PIN);
   y_value = analogRead(VRY_PIN);
-  
+  // 1. write real string to a variable
+  String x_y_data = String(x_value) + ", " + String(y_value) + "\r\n"; 
+  // 2. Encrypt data set
+  String x_y_encrypted = encrypt(x_y_data);
+  // 3. Serial print real & encrypted data string
+  Serial.println("Real value: " + x_y_data);
+  Serial.println("Encrypted value: " + x_y_encrypted + "\n");
+  // 4. Write encrypted string to the file
   appendFile(LittleFS, "/joystick.txt", (String(x_value) + ", " + String(y_value) + "\r\n").c_str());
   Serial.println(String(x_value) + ", " + String(y_value) +  "\n");
   delay(1000);
