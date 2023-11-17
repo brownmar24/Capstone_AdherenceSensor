@@ -210,12 +210,15 @@ void setup(){
 }
 
 String encrypt(String orig_string) { 
-  char enc_string[orig_string.length()];
-
+  String enc_string = "0000000000\n";
+  //Serial.println(orig_string.length());
+  //bool space = false;
   for(int i = 0; orig_string[i] != '\0'; ++i){
+    //Serial.println(orig_string[i]);
     enc_string[i] = orig_string[i] + key;
+    //Serial.println(enc_string[i]);
   }
-
+  //Serial.println(enc_string);
   return enc_string;
 }//encrypt()
 
