@@ -17,6 +17,8 @@
 int x_value = 0;
 int y_value = 0;
 
+int key = 5;
+
 void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
     Serial.printf("Listing directory: %s\r\n", dirname);
 
@@ -99,7 +101,7 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
 }
 
 void appendFile(fs::FS &fs, const char * path, const char * message){
-    Serial.printf("Appending to file: %s\r\n", path);
+    //Serial.printf("Appending to file: %s\r\n", path);
 
     File file = fs.open(path, FILE_APPEND);
     if(!file){
@@ -107,7 +109,7 @@ void appendFile(fs::FS &fs, const char * path, const char * message){
         return;
     }
     if(file.print(message)){
-        Serial.println("- message appended");
+        //Serial.println("- message appended");
     } else {
         Serial.println("- append failed");
     }
@@ -207,11 +209,34 @@ void setup(){
    }
 }
 
+String encrypt(String orig_string) { 
+  String enc_string = "0000000000\n";
+  //Serial.println(orig_string.length());
+  //bool space = false;
+  for(int i = 0; orig_string[i] != '\0'; ++i){
+    //Serial.println(orig_string[i]);
+    enc_string[i] = orig_string[i] + key;
+    //Serial.println(enc_string[i]);
+  }
+  //Serial.println(enc_string);
+  return enc_string;
+}//encrypt()
+
 void loop(){
+  // 1. record x_value & y_value, write them to a string for readability
   x_value = analogRead(VRX_PIN);
   y_value = analogRead(VRY_PIN);
+  String x_y_data = String(x_value) + ", " + String(y_value) + "\n"; 
   
-  appendFile(LittleFS, "/joystick.txt", (String(x_value) + ", " + String(y_value) + "\r\n").c_str());
-  Serial.println(String(x_value) + ", " + String(y_value) +  "\n");
+  // 2. Encrypt data set
+  String x_y_encrypted = encrypt(x_y_data);
+  
+  // 3. Serial print real & encrypted data string
+  Serial.print("Real value: " + x_y_data);
+  Serial.println("Encrypted value: " + x_y_encrypted);
+  
+  // 4. Write encrypted string to the file
+  appendFile(LittleFS, "/joystick.txt", (x_y_encrypted).c_str());
+  //Serial.println(String(x_value) + ", " + String(y_value) +  "\n");
   delay(1000);
 }
