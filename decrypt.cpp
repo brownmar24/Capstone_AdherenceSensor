@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+//#include <Speck.h>
 using namespace std;
 
 
@@ -49,7 +50,7 @@ int main (int argc, char* argv[]){
     string decrypt_fn = fn.substr(0, 4) + "-decrypted" + fn_ext; 
 
     decrypt(fn, decrypt_fn, stoi(argv[2]));
-    cout << stoi(argv[2]);
+    //cout << stoi(argv[2]);
     //string decrypt_fn = 
 
 
