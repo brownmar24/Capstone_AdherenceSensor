@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include "FS.h"
 #include <LittleFS.h>
+#include <>
+
 
 //  You only need to format LittleFS the first time you run a
 //  test or else use the LITTLEFS plugin to create a partition 
@@ -210,7 +212,7 @@ void setup(){
 }
 
 String encrypt(String orig_string) { 
-  String enc_string = "0000000000\n";
+  String enc_string = orig_string;
   //Serial.println(orig_string.length());
   //bool space = false;
   for(int i = 0; orig_string[i] != '\0'; ++i){
