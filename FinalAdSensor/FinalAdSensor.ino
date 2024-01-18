@@ -32,6 +32,7 @@ float accel;
 int detect = 0;
 float timeBlink = 0;
 bool det = false;
+int numReadings = 50;
 
 // Hold the previous averaged readings for each axis on the accelerometer
 float last_x;
@@ -88,7 +89,7 @@ void accelRead() {
   float z_sum = 0;
 
   //Moving Average Filter- Take average of 50 samples for each axis
-  for (int i = 0; i < 50; i++) {
+  for (int i = 0; i < numReadings; i++) {
     lis.getEvent(&event); // Grabs the specific accelerometer data
 
     x_sum += (-event.acceleration.z); // Adds this specific x-axis instance to the sum, using the negated z-axis accelerometer data
