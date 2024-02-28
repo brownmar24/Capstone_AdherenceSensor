@@ -1,4 +1,3 @@
-
 //Go Baby Go Adherence Sensor Master Code
 //Written by Ashlee B, Kyler M, Tara P 4/26/23
 
@@ -16,6 +15,7 @@
 #include "SparkFun_KX13X.h" // Configures and communicates data from the SparkFun KX13X accelerometer
 #include <Adafruit_Sensor.h> // Required library for all Adafruit Unified Sensor libraries
 #include <Adafruit_LIS3DH.h> // Configures and communicates data from Adafruit LIS3DH accelerometer (uses Unifed Sensor Library)
+#include <SparkFun_MAX1704x_Fuel_Gauge_Arduino_Library.h>
 #include "FS.h" // ESP 32 File System library
 #include "SD.h" // Reading and writing to SD cards using the SPI interface of a microcontroller
 #include "SPI.h" // Part of the SPI library
@@ -49,13 +49,30 @@ float move_tholdZ = 0.1;
 
 //Pins
 #define EVI 14 // Timestamp pin
-#define LED 17 // LED pin
+#define R_LED 4 // Red LED pin
+#define G_LED 13 // Green LED pin - changed from 16 to 13 
+#define B_LED 17 // Blue LED pin
+#define BUTTON 25 // Button input pin
 
+// Read state of the button press
+int buttonState = 0;
 
+// Create a battery object and battery percentage variable
+SFE_MAX1704X battery;
+double battery_percent;
+int low_battery_threshold = 20;
+
+// Idle Mode: variables that measure the time since the last detected motion
+unsigned long stop_motion;
+unsigned long current_time;
+lis3dh_dataRate_t current_rate = lis.getDataRate();
 
 void setup()
 {
-  pinMode(LED, OUTPUT); // Sets the LED pin for output information (turning on and off the LED)
+  pinMode(R_LED, OUTPUT);
+  pinMode(G_LED, OUTPUT);
+  pinMode(B_LED, OUTPUT);
+  pinMode(BUTTON, INPUT);
   pinMode(EVI, OUTPUT); // NEED INFORMATION: Why is this an output pin?
   Wire.begin();//I2C addresses begin
   Serial.begin(115200);//set baud rate
@@ -68,6 +85,10 @@ void setup()
   }
   Serial.println("RTC online!"); // Prints to the serial monitor that the RTC was found 
 
+  if (rtc.setToCompilerTime() == false) {
+    Serial.println("An error has occurred in setting the RTC to compiler time");
+  }
+
   rtc.setEVIEventCapture(RV8803_ENABLE); //Enables the Timestamping function
 
   Serial.println("LIS3DH test!");
@@ -79,6 +100,7 @@ void setup()
 
   // Set up lis and init readings
   lis.setRange(LIS3DH_RANGE_4_G); // NEED INFORMATION: What does this mean?
+
   delay(10); // Delays by 10 milliseconds
   lis.read(); // Takes a reading from the accelerometer
   
@@ -114,7 +136,15 @@ void setup()
   else { // If the card is of another type, follow this condition
     Serial.println("UNKNOWN"); // Prints that the card is of an unknown type of the serial monitor
   }
-  
+
+  // Initialize the MAX17043
+  if (battery.begin() == false) {
+    Serial.println("Can't find MAX1704X Battery");
+  }
+
+  battery.quickStart(); // Restarts the MAX1704X to createa. more accurate guess for the SOC
+  battery.setThreshold(low_battery_threshold); // An interrupte to alert when the battery reahes 20% and below
+
   //axis zeroing to eliminate false positives
   x = 0;
   y = 0;
@@ -127,6 +157,7 @@ void setup()
   if (!file) { // If the file cannot be opened, follow this condition
     Serial.println("Could not open file(writing)."); // Prints that the accelerometer.txt file cannot be opened
   }
+
   else { // If the file can be opened, follow this condition
     file.println(); // Adds a new line to the file
     file.print("Device start up at: "); // Writes this to the bottom of the file
@@ -136,7 +167,66 @@ void setup()
   }
 }
 
+
+
 void loop() {
+  /*
+   * Condition 1: Bluetooth File Transfer
+   * The user presses the button to send the file from the device to a supported computer or mobile device
+  */
+
+  // Records whether the button has been pressed
+  buttonState = digitalRead(BUTTON);
+  current_time = millis();
+
+  // Gets the battery percent
+  battery_percent = battery.getSOC();
+
+
+  // Check for button press
+  if (buttonState == 1) {
+    setColor(0, 0, 255); // Set LED color to blue
+    // If yes, then do the bluetooth transfer protocol
+    // Make sure all protocol finish before returning to normal procedures
+    // Reset state of the button to "not-pressed"
+    delay(5000);
+    buttonState = 0;
+    setColor(0, 255, 0); 
+  }
+  
+  /* CHECK FOR IDLE MODE HERE */
+  else if (current_time - stop_motion > 30000) {
+    setColor(255, 30, 0);
+    lis.setDataRate(LIS3DH_DATARATE_LOWPOWER_5KHZ);
+
+    // Used to detect changes between datarates
+    // Serial.println(LIS3DH_DATARATE_LOWPOWER_5KHZ);
+
+    motionDetection();
+  }
+
+  // Checks if battery is below 20 percent 
+  else if (battery_percent < 20) {
+    setColor(255, 0, 0);
+    motionDetection();
+    // Print the battery percentage
+    Serial.print("Battery Percentage: ");
+    Serial.print(battery_percent);
+    Serial.println("%");
+  }
+
+  else {
+    setColor(0, 255, 0);
+    lis.setDataRate(LIS3DH_DATARATE_10_HZ);
+
+    // Used to test changes between datarates
+    // Serial.println(LIS3DH_DATARATE_10_HZ);
+    
+    motionDetection();
+  }  
+}
+
+void motionDetection() {
   // Accelerometer
   // Uses a delta scheme to detect movement
   accelRead();
@@ -147,10 +237,11 @@ void loop() {
        abs(last_y - y) > move_tholdY &&
        abs(last_z - z) > move_tholdZ && det == false) {
     digitalWrite(EVI, HIGH);   // trigger EVI pin
-    delay(20);                       // wait for a second
+    delay(20);                 // wait for a second
     digitalWrite(EVI, LOW);    // turn off EVI pin output
     Serial.print("Detected "); //Debug purposes
     det = true; // Indicates a new motion was detected
+    stop_motion = millis();
     sd_Start(); // Writes to the file when the motion was detected
   } 
   
@@ -172,6 +263,7 @@ void loop() {
     sd_Stop(); // Prints the time the motion stopped
     det = false; // Resets the det boolean to false
     detect = 0; // Resets the detect counter
+    stop_motion = millis(); // Detects the time motion stops
   } 
   
   else { //if the data goes above the thresholds over reset detect counter
@@ -180,7 +272,6 @@ void loop() {
 
   // Give time between readings
   delay(100); // 100 milliseconds between readings
-
 }
 
 //timestamp subroutine
@@ -270,4 +361,10 @@ void sd_Stop() {//printing to the SD card
     file.println(); // Adds a new line to the text file
     file.close(); // Closes the accelerationdata.txt file
   }
+}
+
+void setColor(int redValue, int greenValue, int blueValue) {
+  analogWrite(R_LED, redValue);
+  analogWrite(G_LED, greenValue);
+  analogWrite(B_LED, blueValue);
 }
