@@ -16,10 +16,14 @@
 #include <Adafruit_Sensor.h> // Required library for all Adafruit Unified Sensor libraries
 #include <Adafruit_LIS3DH.h> // Configures and communicates data from Adafruit LIS3DH accelerometer (uses Unifed Sensor Library)
 #include <SparkFun_MAX1704x_Fuel_Gauge_Arduino_Library.h>
+#include <AES.h> // 128-bit CBC for encryption
+#include <AESLib.h>
+#include <CTR.h> // Part of the crypto libraries
+#include <Crypto.h> // Rhys Weatherly's crypto library
+#include "arduino_base64.hpp"
 #include "FS.h" // ESP 32 File System library
 #include "SD.h" // Reading and writing to SD cards using the SPI interface of a microcontroller
 #include "SPI.h" // Part of the SPI library
-
 
 //variables
 RV8803 rtc; // Real Time Clock variable - uses the class RV8803
@@ -67,8 +71,14 @@ unsigned long stop_motion;
 unsigned long current_time;
 lis3dh_dataRate_t current_rate = lis.getDataRate();
 
-void setup()
-{
+//Encryption Variables: for encrypting anything printed using the Crypto libraries
+//uint8_t key[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
+//char data[] = "0123456789012345"; //16 chars == 16 bytes
+
+AESLib aesLib;
+//CTR<AES> ctrEncryptor; // Will later put the aes encryptor in?
+
+void setup() {
   pinMode(R_LED, OUTPUT);
   pinMode(G_LED, OUTPUT);
   pinMode(B_LED, OUTPUT);
@@ -165,6 +175,11 @@ void setup()
     file.println(); // Prints another new line to the bottom of the file
     file.close(); // Closes the file
   }
+
+  // Encryption key and iv assignments
+  //ctrEncryptor.setKey(key, 16);
+  //ctrEncryptor.setIV(iv, 16);
+  //ctrEncryptor.setBlockCipher(&aesEncryptor);
 }
 
 
@@ -221,7 +236,7 @@ void loop() {
 
     // Used to test changes between datarates
     // Serial.println(LIS3DH_DATARATE_10_HZ);
-    
+
     motionDetection();
   }  
 }
@@ -334,33 +349,137 @@ void sd_Start() {//prints to sd card starting
 
   String startTime = RTC(); // Grabs the initial timestamp using the RTC helper function
   Serial.println(); // Adds a new line in the serial monitor
-  File file = SD.open("/accelerationdata.txt", FILE_APPEND); //open file.txt to write data
-  if (!file) { // If the accelerationdata.txt file couldn't be read, follow this condition
-    Serial.println("Could not open file(writing)."); // Prints to the serial monitor that the file couldn't be opened
-  }
-  else { // The accelerationdata.txt file could be read: 
-    file.print("Start Time of Motion Detected At: "); // Appends this to the bottom of the file when a new motion is detected
-    file.print(startTime); // Prints the initial time stamp to the file
-    file.println(); // Adds a new line to the text file
-    file.close(); // Closes accelerationdata.txt file
-  }
 
+  String start_encrypt = "Start Time of Motion Detected At: " + startTime + "\n"; // String for the start time
+  encryptAndWrite(start_encrypt);
+  //file.print(start_encrypt); // Appends this to the bottom of the file when a new motion is detected
 }
+
 void sd_Stop() {//printing to the SD card
 
   String stopTime = RTC(); //timestamp
   Serial.println(); // Adds a new line
+
+  // The acclerationdata.txt file could be read
+  String stop_encrypt = "Time of Stop Detected At: " + stopTime + "\n";
+  encryptAndWrite(stop_encrypt);
+  //file.print(stop_encrypt); // Appends this to the bottom of the file when motion is stopped
+}
+
+void encryptAndWrite(String data) {
   File file = SD.open("/accelerationdata.txt", FILE_APPEND); //open file.txt to write data
   if (!file) { // If the accelerationdata.txt file couldn't be read, follow this condition
     Serial.println("Could not open file(writing)."); // Prints to the serial monitor that the file couldn't be opened
   }
 
-  else { // The acclerationdata.txt file could be read
-    file.print("Time of Stop Detected At: "); // Appends this to the bottom of the file when motion is stopped
-    file.print(stopTime); // Prints the stopping time stamp to the file
+  else { 
+    //size_t dataSize = strlen(data);
+    //byte encryptedBuffer[dataSize];
+    //memcpy(encryptedBuffer, data, dataSize);
+    //ctrEncryptor.encrypt(encryptedBuffer, encryptedBuffer, dataSize); // change to .encrypt if doesn't work
+
+    data = encrypt(data);
+    file.print(data);
+    String data2 = decrypt(data);
+    file.print(data2);
     file.println(); // Adds a new line to the text file
-    file.close(); // Closes the accelerationdata.txt file
+    file.close(); // Closes accelerationdata.txt file
   }
+}
+
+String encrypt(String inputText) {
+
+    // calculate the length of bytes of the input text
+    // an extra of byte must be added for a null character
+    // a null character will be filled as a text terminator
+    // so that the process will not overflow to other parts of memory    
+    int bytesInputLength = inputText.length() + 1;
+
+    // declare an empty byte array (a memory storage)
+    byte bytesInput[bytesInputLength];
+
+    // convert the text into bytes, a null char is filled at the end
+    inputText.getBytes(bytesInput, bytesInputLength);
+
+    // calculate the length of bytes after encryption done
+    int outputLength = aesLib.get_cipher_length(bytesInputLength);
+
+    // declare an empty byte array (a memory storage)
+    byte bytesEncrypted[outputLength];
+
+    // initializing AES engine
+
+    // Cipher Mode and Key Size are preset in AESLib
+    // Cipher Mode = CBC
+    // Key Size = 128
+
+    // declare the KEY and IV
+    byte aesKey[] = { 23, 45, 56, 67, 67, 87, 98, 12, 32, 34, 45, 56, 67, 87, 65, 5 };
+    byte aesIv[] = { 123, 43, 46, 89, 29, 187, 58, 213, 78, 50, 19, 106, 205, 1, 5, 7 };
+
+    // set the padding mode to paddingMode.CMS
+    aesLib.set_paddingmode((paddingMode)0);
+
+    // encrypt the bytes in "bytesInput" and store the output at "bytesEncrypted"
+    // param 1 = the source bytes to be encrypted
+    // param 2 = the length of source bytes
+    // param 3 = the destination of encrypted bytes that will be saved
+    // param 4 = KEY
+    // param 5 = the length of KEY bytes (16)
+    // param 6 = IV
+    aesLib.encrypt(bytesInput, bytesInputLength, bytesEncrypted, aesKey, 16, aesIv);
+
+    // declare a empty char array
+    char base64EncodedOutput[base64::encodeLength(outputLength)];
+
+    // convert the encrypted bytes into base64 string "base64EncodedOutput"
+    base64::encode(bytesEncrypted, outputLength, base64EncodedOutput);
+
+    // convert the encoded base64 char array into string
+    return String(base64EncodedOutput);
+}
+
+// the decryption function
+String decrypt(String encryptedBase64Text) {
+
+    // calculate the original length before it was coded into base64 string
+    int originalBytesLength = base64::decodeLength(encryptedBase64Text.c_str());
+
+    // declare empty byte array (a memory storage)
+    byte encryptedBytes[originalBytesLength];
+    byte decryptedBytes[originalBytesLength];
+
+    // convert the base64 string into original bytes
+    // which is the encryptedBytes
+    base64::decode(encryptedBase64Text.c_str(), encryptedBytes);
+
+    // initializing AES engine
+
+    // Cipher Mode and Key Size are preset in AESLib
+    // Cipher Mode = CBC
+    // Key Size = 128
+
+    // declare the KEY and IV
+    byte aesKey[] = { 23, 45, 56, 67, 67, 87, 98, 12, 32, 34, 45, 56, 67, 87, 65, 5 };
+    byte aesIv[] = { 123, 43, 46, 89, 29, 187, 58, 213, 78, 50, 19, 106, 205, 1, 5, 7 };
+
+    // set the padding mode to paddingMode.CMS
+    aesLib.set_paddingmode((paddingMode)0);
+
+    // decrypt bytes in "encryptedBytes" and save the output in "decryptedBytes"
+    // param 1 = the source bytes to be decrypted
+    // param 2 = the length of source bytes
+    // param 3 = the destination of decrypted bytes that will be saved
+    // param 4 = KEY
+    // param 5 = the length of KEY bytes (16)
+    // param 6 = IV
+    aesLib.decrypt(encryptedBytes, originalBytesLength, 
+                   decryptedBytes, aesKey, 16, aesIv);
+
+    // convert the decrypted bytes into original string
+    String decryptedText = String((char*)decryptedBytes);
+
+    return decryptedText;
 }
 
 void setColor(int redValue, int greenValue, int blueValue) {
