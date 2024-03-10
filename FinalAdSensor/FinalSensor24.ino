@@ -1,29 +1,44 @@
-//Go Baby Go Adherence Sensor Master Code
-//Written by Ashlee B, Kyler M, Tara P 4/26/23
+#include <BTAddress.h>
+#include <BTAdvertisedDevice.h>
+#include <BTScan.h>
+#include <BluetoothSerial.h>
 
-//Components:
-//Accelerometer- reading implemented
-//Low Power Mode
-//RTC- EVI Pin implemented
-//SD Card R/W
-//Bluetooth(possible)
+// Go Baby Go Adherence Sensor Master Code
+// Written by Ashlee B, Kyler M, Tara P 4/26/23
+// Adapted by Margo B, Kaylee M, Anna Y
 
 //Libraries
 #include <SPI.h> // Communication with Serial Peripheral Interface (SPI) devices (ex. microcontroller and other circuits)
 #include <Wire.h> // I2C communication between chips
 #include <SparkFun_RV8803.h> // Read and set time on the RTC
-#include "SparkFun_KX13X.h" // Configures and communicates data from the SparkFun KX13X accelerometer
 #include <Adafruit_Sensor.h> // Required library for all Adafruit Unified Sensor libraries
 #include <Adafruit_LIS3DH.h> // Configures and communicates data from Adafruit LIS3DH accelerometer (uses Unifed Sensor Library)
 #include <SparkFun_MAX1704x_Fuel_Gauge_Arduino_Library.h>
 #include <AES.h> // 128-bit CBC for encryption
 #include <AESLib.h>
+#include "BluetoothSerial.h"
 #include <CTR.h> // Part of the crypto libraries
 #include <Crypto.h> // Rhys Weatherly's crypto library
 #include "arduino_base64.hpp"
 #include "FS.h" // ESP 32 File System library
-#include "SD.h" // Reading and writing to SD cards using the SPI interface of a microcontroller
+#include <SD.h> // Potential Problem: the duplicate libraries
 #include "SPI.h" // Part of the SPI library
+
+//Pins
+#define EVI 14 // Timestamp pin
+#define R_LED 4 // Red LED pin
+#define G_LED 13 // Green LED pin - changed from 16 to 13 
+#define B_LED 17 // Blue LED pin
+#define BUTTON 25 // Button input pin
+
+// Bluetooth definitions
+#if !defined(CONFIG_BT_ENABLED) || !defined(CONFIG_BLUEDROID_ENABLED)
+#error Bluetooth is not enabled! Please run 'make menuconfig' to and enable it
+#endif
+
+#if !defined(CONFIG_BT_SPP_ENABLED)
+#error Serial Bluetooth not available or not enabled. It is only available for the ESP32 chip.
+#endif
 
 //variables
 RV8803 rtc; // Real Time Clock variable - uses the class RV8803
@@ -46,18 +61,6 @@ float x;
 float y;
 float z;
 
-// Threshold of change in each axis to be considered a detected movement
-float move_tholdX = 0.1;
-float move_tholdY = 0.1;
-float move_tholdZ = 0.1;
-
-//Pins
-#define EVI 14 // Timestamp pin
-#define R_LED 4 // Red LED pin
-#define G_LED 13 // Green LED pin - changed from 16 to 13 
-#define B_LED 17 // Blue LED pin
-#define BUTTON 25 // Button input pin
-
 // Read state of the button press
 int buttonState = 0;
 
@@ -71,12 +74,10 @@ unsigned long stop_motion;
 unsigned long current_time;
 lis3dh_dataRate_t current_rate = lis.getDataRate();
 
-//Encryption Variables: for encrypting anything printed using the Crypto libraries
-//uint8_t key[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
-//char data[] = "0123456789012345"; //16 chars == 16 bytes
-
 AESLib aesLib;
-//CTR<AES> ctrEncryptor; // Will later put the aes encryptor in?
+
+File file; // The accelerationdata.txt file
+BluetoothSerial SerialBT;
 
 void setup() {
   pinMode(R_LED, OUTPUT);
@@ -90,23 +91,23 @@ void setup() {
   //RTC initialization
   if (rtc.begin() == false) // If the RTC cannot be found or started
   {
-    Serial.println("Device not found. Please check wiring. Freezing."); // Prints to the serial monitor that the RTC cannot be found
+    Serial.println(F("Device not found. Please check wiring. Freezing.")); // Prints to the serial monitor that the RTC cannot be found
     while (1); // NEED INFORMATION: why are they using an infinite loop?
   }
-  Serial.println("RTC online!"); // Prints to the serial monitor that the RTC was found 
+  Serial.println(F("RTC online!")); // Prints to the serial monitor that the RTC was found 
 
   if (rtc.setToCompilerTime() == false) {
-    Serial.println("An error has occurred in setting the RTC to compiler time");
+    Serial.println(F("An error has occurred in setting the RTC to compiler time"));
   }
 
   rtc.setEVIEventCapture(RV8803_ENABLE); //Enables the Timestamping function
 
-  Serial.println("LIS3DH test!");
+  Serial.println(F("LIS3DH test!"));
   if (! lis.begin(0x18)) { // If the LIS3DH accelerometer cannot be found or used, follow this condition
-    Serial.println("Couldnt start"); // Prints to the serial monitor that the accelerometer cannot be found
+    Serial.println(F("Couldnt start")); // Prints to the serial monitor that the accelerometer cannot be found
     while (1) yield(); // NEED INFORMATION: why are they using an infinite loop AGAIN? What is yield?
   }
-  Serial.println("LIS3DH found!"); // The LIS3DH accelerometer is found
+  Serial.println(F("LIS3DH found!")); // The LIS3DH accelerometer is found
 
   // Set up lis and init readings
   lis.setRange(LIS3DH_RANGE_4_G); // NEED INFORMATION: What does this mean?
@@ -121,35 +122,35 @@ void setup() {
 
   // Check if SD is connected correctly
   if (!SD.begin()) { // If the SD card cannot be found, follow this condition
-    Serial.println("Card Mount Failed"); // Prints to the serial monitor that the SD card cannot be found
+    Serial.println(F("Card Mount Failed")); // Prints to the serial monitor that the SD card cannot be found
     // Removed: digitalWrite(LED, HIGH); while (1) {}
     return; // Returns without further action
   }
   uint8_t cardType = SD.cardType(); // Saves the type of SD card to an unsigned 8-bit integer
 
   if (cardType == CARD_NONE) { // If there is no SD card, follow this condition
-    Serial.println("No SD card attached"); // Prints that there is no SD card attached
+    Serial.println(F("No SD card attached")); // Prints that there is no SD card attached
     // Removed: digitalWrite(LED, HIGH); while (1) {}
     return; // Returns with no further action
   }
 
   Serial.print("SD Card Type: "); // Prints this statement to the serial monitor
   if (cardType == CARD_MMC) { // If the card is a MultiMediaCard, follow this condition
-    Serial.println("MMC"); // Prints that the card is a MultiMediaCard (MMC) to the serial monitor
+    Serial.println(F("MMC")); // Prints that the card is a MultiMediaCard (MMC) to the serial monitor
   }
   else if (cardType == CARD_SD) { // If the card is a standard SD card, follow this condition
-    Serial.println("SDSC"); // Prints that the card is a standard SD card to the serial monitor
+    Serial.println(F("SDSC")); // Prints that the card is a standard SD card to the serial monitor
   }
   else if (cardType == CARD_SDHC) { // If the card is a high capacity SD card, follow this condition
-    Serial.println("SDHC"); // Prints that the card is a high capacity SD card to the serial monitor
+    Serial.println(F("SDHC")); // Prints that the card is a high capacity SD card to the serial monitor
   }
   else { // If the card is of another type, follow this condition
-    Serial.println("UNKNOWN"); // Prints that the card is of an unknown type of the serial monitor
+    Serial.println(F("UNKNOWN")); // Prints that the card is of an unknown type of the serial monitor
   }
 
   // Initialize the MAX17043
   if (battery.begin() == false) {
-    Serial.println("Can't find MAX1704X Battery");
+    Serial.println(F("Can't find MAX1704X Battery"));
   }
 
   battery.quickStart(); // Restarts the MAX1704X to createa. more accurate guess for the SOC
@@ -159,13 +160,17 @@ void setup() {
   x = 0;
   y = 0;
   z = 0;
+
+  // Bluetooth Transfer Set-Up
+  SerialBT.begin("Adherence_Sensor"); // Sets the name of the device
+  Serial.println(F("The device can connect to Bluetooth"));
   
   // Procedure at device start-up
   String startTime = RTC(); //timestamp
   Serial.println();
-  File file = SD.open("/accelerationdata.txt", FILE_APPEND); //open file.txt to write data
+  file = SD.open("/accelerationdata.txt", FILE_APPEND); //open file.txt to write data
   if (!file) { // If the file cannot be opened, follow this condition
-    Serial.println("Could not open file(writing)."); // Prints that the accelerometer.txt file cannot be opened
+    Serial.println(F("Could not open file(writing).")); // Prints that the accelerometer.txt file cannot be opened
   }
 
   else { // If the file can be opened, follow this condition
@@ -175,14 +180,7 @@ void setup() {
     file.println(); // Prints another new line to the bottom of the file
     file.close(); // Closes the file
   }
-
-  // Encryption key and iv assignments
-  //ctrEncryptor.setKey(key, 16);
-  //ctrEncryptor.setIV(iv, 16);
-  //ctrEncryptor.setBlockCipher(&aesEncryptor);
 }
-
-
 
 void loop() {
   /*
@@ -197,10 +195,43 @@ void loop() {
   // Gets the battery percent
   battery_percent = battery.getSOC();
 
-
-  // Check for button press
+  // Check for button press 
   if (buttonState == 1) {
     setColor(0, 0, 255); // Set LED color to blue
+    while(1) {
+      if (SerialBT.available()) { // If there is data coming in (from Bluetooth)
+        String command = SerialBT.readStringUntil('\n'); // Read string until new line
+        command.trim(); // Remove leading and trailing whitespace
+
+        if (command == "read") {
+          file = SD.open("/accelerationdata.txt", FILE_READ);
+          if (file) { // Prints all data from the file to the serial monitor
+            while(file.available()) {
+              SerialBT.write(file.read());
+            }
+            file.close();
+          }
+          else {
+            Serial.println(F("ERROR: Cannot open file"));
+            SerialBT.println("ERROR: Cannot open /accelerationdata.txt; File Size: " + String(SD.open("/accelerationdata.txt").size()));
+          }
+        }
+        else if (command == "delete") {
+          SD.remove("/accelerationdata.txt");
+          if (SD.exists("/accelerationdata.txt")) {
+            Serial.println(F("Delete functionality did not work"));
+          }
+          else {
+            file = SD.open("/accelerationdata.txt", FILE_APPEND); //open file.txt to write data
+            file.close();
+            SerialBT.println("Please restart the Adherence Sensor");
+          }
+        }
+        else {
+          SerialBT.println("Invalid command: " + command);
+        }
+      }
+    }  
     // If yes, then do the bluetooth transfer protocol
     // Make sure all protocol finish before returning to normal procedures
     // Reset state of the button to "not-pressed"
@@ -213,10 +244,6 @@ void loop() {
   else if (current_time - stop_motion > 30000) {
     setColor(255, 30, 0);
     lis.setDataRate(LIS3DH_DATARATE_LOWPOWER_5KHZ);
-
-    // Used to detect changes between datarates
-    // Serial.println(LIS3DH_DATARATE_LOWPOWER_5KHZ);
-
     motionDetection();
   }
 
@@ -246,6 +273,11 @@ void motionDetection() {
   // Uses a delta scheme to detect movement
   accelRead();
   Serial.println(x);
+
+  // Threshold of change in each axis to be considered a detected movement
+  float move_tholdX = 0.1;
+  float move_tholdY = 0.1;
+  float move_tholdZ = 0.1;
 
   // If there is a significant change in all three axes, create a timestampe to record to SD card, and indicate the start of a new motion
   if ( abs(last_x - x) > move_tholdX &&
@@ -367,19 +399,15 @@ void sd_Stop() {//printing to the SD card
 }
 
 void encryptAndWrite(String data) {
-  File file = SD.open("/accelerationdata.txt", FILE_APPEND); //open file.txt to write data
+  file = SD.open("/accelerationdata.txt", FILE_APPEND); //open file.txt to write data
   if (!file) { // If the accelerationdata.txt file couldn't be read, follow this condition
     Serial.println("Could not open file(writing)."); // Prints to the serial monitor that the file couldn't be opened
   }
 
   else { 
-    //size_t dataSize = strlen(data);
-    //byte encryptedBuffer[dataSize];
-    //memcpy(encryptedBuffer, data, dataSize);
-    //ctrEncryptor.encrypt(encryptedBuffer, encryptedBuffer, dataSize); // change to .encrypt if doesn't work
-
     data = encrypt(data);
     file.print(data);
+    Serial.println(data);
     String data2 = decrypt(data);
     file.print(data2);
     file.println(); // Adds a new line to the text file
