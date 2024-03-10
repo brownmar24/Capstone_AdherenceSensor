@@ -12,6 +12,7 @@
 #error Serial Bluetooth not available or not enabled. It is only available for the ESP32 chip.
 #endif
 
+// read, delete, exit
 BluetoothSerial SerialBT;
 File file;
 String str = "Hello World!";
@@ -24,20 +25,22 @@ void setup() {
     Serial.println("SD card initialization failed!");
     return;
   }
+  /* this is for if you want the 
   file = SD.open("/letters.txt", FILE_WRITE);
   if (!file) {
     Serial.println("ERROR: cannot open file.");
     return;
-  
+  }
   fill_file(file); // Add all letters
   file.close();
   // operator is_open = file.isOpen();
   Serial.println("File written successfully");
-  }
+  */
 
   // Bluetooth setup stuff
   SerialBT.begin("ESP32_test11"); // Bluetooth device name
   Serial.println("The device started, now you can pair it with bluetooth!");
+
 } // setup()
 
 void loop() {
@@ -46,12 +49,16 @@ void loop() {
     command.trim(); // remove leading and trailing whitespace
 
     if (command == "read") { // this is true, command reads fine
-      file = SD.open("letters.txt", FILE_READ); // returning 0???
+      file = SD.open("/letters.txt", FILE_READ); // returning 0???
       if (file) {
         while (file.available()) {
-          Serial.write(file.read());
+          SerialBT.write(file.read());
         } // while()
         file.close();
+        Serial.println();
+        Serial.println("I am here!");
+        SerialBT.println();
+        SerialBT.println("I am here!");
       } else { // if file == false
         Serial.print("ERROR: cannot open file. Error code: ");
         //Serial.println(SD.error());
