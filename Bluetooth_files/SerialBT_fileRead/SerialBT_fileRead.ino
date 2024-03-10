@@ -28,11 +28,12 @@ void setup() {
   if (!file) {
     Serial.println("ERROR: cannot open file.");
     return;
-  }
-  fill_file(); // Add all letters
+  
+  fill_file(file); // Add all letters
   file.close();
   // operator is_open = file.isOpen();
   Serial.println("File written successfully");
+  }
 
   // Bluetooth setup stuff
   SerialBT.begin("ESP32_test11"); // Bluetooth device name
@@ -68,17 +69,17 @@ void loop() {
       Serial.println("Saved data deleted.");
       SerialBT.println("Saved data deleted."); // send confirmation to the Bluetooth device
     } else {
-      Serial.println("ERROR: please enter 'read', or 'delete'.");
-      SerialBT.println("ERROR: please enter 'read', or 'delete'."); // send error msg to bluetooth device
+      //Serial.println(command);
+      SerialBT.println(command); // send error msg to bluetooth device
     }
   }
 } // loop()
 
-void fill_file() {
+void fill_file(File f) {
   for (char c = 'A'; c <= 'Z'; c++) {
-    file.println(c);
+    f.println(c);
   } // for()
   for (char c = 'a'; c <= 'z'; c++) {
-    file.println(c);
+    f.println(c);
   } // for()
 } // fill_file()
