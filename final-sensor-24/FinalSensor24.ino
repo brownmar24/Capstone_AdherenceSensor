@@ -171,8 +171,9 @@ void setup() {
 
   else {                                 // If the file can be opened, follow this condition
     file.println();                      // Adds a new line to the file
-    file.print("Device start up at: ");  // Writes this to the bottom of the file
-    file.print(startTime);               // Prints the start-up time to the bottom of the file
+    String start_up = "Device start up at: " + startTime); // Encrypts the start-up time string
+    String encrypted = encryptAndWrite(start_up);
+    file.println(encrypted);
     file.println();                      // Prints another new line to the bottom of the file
     file.close();                        // Closes the file
   }
